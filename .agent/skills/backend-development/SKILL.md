@@ -62,11 +62,34 @@ export async function createEmptyPost(context: DbContext) {
 - **Pattern**: API should remain thin (middleware + validation + service call). Avoid re-wrapping service return values in API layer when not needed.
 - **Pattern**: Use `createServerFn()` with middleware chains to progressively build context.
 
+#### File Naming Convention
+
+Small modules use a single file; larger modules split by access level:
+
+| Pattern | When to use |
+| :--- | :--- |
+| `api/<name>.api.ts` | Simple modules with few endpoints |
+| `api/<name>.public.api.ts` | Public endpoints (no auth required) |
+| `api/<name>.admin.api.ts` | Admin-only endpoints |
+| `api/<name>.user.api.ts` | Authenticated user endpoints |
+
 #### Middleware Composition
 
 ```typescript
 import { createServerFn } from "@tanstack/react-start";
 import { adminMiddleware, dbMiddleware, createRateLimitMiddleware } from "@/lib/middlewares";
+import { CreateTagInputSchema } from "./tags.schema";
+
+// Public endpoint (database only)
+export const getPostsFn = createServerFn()
+  .middleware([dbMiddleware])
+  .handler(({ context }) => PostService.getPosts(context));
+
+// Admin endpoint with Zod validation
+export const createTagFn = createServerFn({ method: "POST" })
+  .middleware([adminMiddleware])
+  .inputValidator(CreateTagInputSchema) // ← Zod schema, not .validator()
+  .handler(({ data, context }) => TagService.createTag(context, data));
 
 // Public endpoint with rate limiting
 export const createCommentFn = createServerFn()
@@ -74,16 +97,6 @@ export const createCommentFn = createServerFn()
     createRateLimitMiddleware({ capacity: 10, interval: "1m", key: "comments:create" }),
   ])
   .handler(({ data, context }) => CommentService.createComment(context, data));
-
-// Public endpoint (database only)
-export const getPostsFn = createServerFn()
-  .middleware([dbMiddleware])
-  .handler(({ context }) => PostService.getPosts(context));
-
-// Admin endpoint (auth + admin role required)
-export const updatePostFn = createServerFn()
-  .middleware([adminMiddleware]) // Includes dbMiddleware + sessionMiddleware + auth check + admin check
-  .handler(({ data, context }) => PostService.updatePost(context, data));
 ```
 
 > For CDN caching patterns (Cache-Control headers via page or Hono routes), see the **caching-strategies** skill.
@@ -145,7 +158,7 @@ Middlewares progressively inject dependencies and enforce policies.
 | :-------------------------------- | :-------------------------------------- | :------------------ |
 | `authMiddleware`                  | Requires valid session (request error)  | `sessionMiddleware` |
 | `adminMiddleware`                 | Requires admin role (request error)     | `authMiddleware`    |
-| `createRateLimitMiddleware(opts)` | Rate limiting via Durable Object        | (none)              |
+| `createRateLimitMiddleware(opts)` | Rate limiting via Durable Object        | `sessionMiddleware` |
 
 ### Middleware Chain Example
 
