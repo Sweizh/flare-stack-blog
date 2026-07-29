@@ -41,6 +41,12 @@ function PublicLayout() {
       to: "/friend-links" as const,
       id: "friend-links",
     },
+    {
+      label: m.nav_uptime(),
+      to: "/" as const,
+      id: "uptime",
+      href: "https://uptime.sweizh.top/",
+    },
   ];
 
   const logout = async () => {
